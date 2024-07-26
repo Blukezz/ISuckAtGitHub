@@ -2,9 +2,12 @@
 
 -- // Defining Variables: Settings
 
+local Global = (getgenv and getgenv()) or shared
+
 local Configuration = Configuration or {}
 local ReturnOnDeath = Configuration.ReturnOnDeath or false
 local Flinging = Configuration.Flinging or false
+local PresetFling = Configuration.PresetFling or false
 local Animations = Configuration.Animations or true
 local WaitTime = Configuration.WaitTime or 0.178
 local RigName = Configuration.RigName or "Evolution, it must've passed you by."
@@ -113,6 +116,9 @@ local LastCharacter = Character
 local Humanoid = GetInstanceWithTime(Character, "Humanoid", nil, 3)
 local RootPart = GetInstanceWithTime(Character, "Part", "HumanoidRootPart", 3)
 
+local FlingActive = false
+local FlingQueue = {}
+
 local CFrameBackup = AntiVoiding and RootPart.CFrame or nil
 local FallenPartsDestroyHeight = Workspace.FallenPartsDestroyHeight + 75
 local CanCallSimRadius = SetSimulationRadius and pcall(function() Player.SimulationRadius = 1000 end) or nil
@@ -123,6 +129,8 @@ local FakeRig = Instance.new("Model")
 local FakeHumanoid = Instance.new("Humanoid")
 local FakeRigChildren = {}
 local FakeRoot = nil
+
+Global.Rig = FakeRig
 
 local function CancelScript()  -- : nil
 	for _, Signal in RBXSignals do
@@ -587,6 +595,16 @@ local function ArePlayersNearby() -- : Boolean
 	return true
 end
 
+function Global:FlingCharacter(TargetCharacter) -- <Character> : nil [Required: Flinging = true and PresetFling = false]
+	if Flinging and not PresetFling and TargetCharacter ~= Character then
+		local Target = BetterFindFirstChildOfClass(TargetCharacter, "Humanoid")
+
+		if Target then
+			table.insert(FlingQueue, Target)
+		end
+	end
+end
+
 -- // RunTime: Event functions
 
 local function SetCameraTarget() -- Function | SIGNAL: Camera:GetPropertySignalChanged("CameraSubject")
@@ -614,8 +632,9 @@ local function OnInputChange(Input, GameProcessed, Bool) -- SIGNAL: UIS.InputBeg
 	end
 end
 
-local function OnFlingEnabled() -- SIGNAL: RunService.PostSimulation [Required: Flinging = true]
-	if not MouseDown then return end
+local function OnPresetFlingEnabled() -- SIGNAL: RunService.PostSimulation [Required: Flinging = true and PresetFling = true]
+	if not MouseDown then FlingActive = false return end
+	FlingActive = true
 
 	local Target = Mouse.Target
 	local TargetParent = Target and Target.Parent
@@ -637,6 +656,34 @@ local function OnFlingEnabled() -- SIGNAL: RunService.PostSimulation [Required: 
 	else
 		RootPart.CFrame = HitCalciulation
 		RootPart.AssemblyLinearVelocity = Vector3.zero
+	end
+end
+
+-- im bad at naming things / blukez
+local function OnPlayerFling() -- SIGNAL: RunService.PostSimulation [Required: Flinging = true and PresetFling = false]
+	if #FlingQueue == 0 then FlingActive = false return end
+	FlingActive = true
+	
+	local Target = FlingQueue[1]
+	
+	if Target then
+		local Part = GetFirstPart(Target.Parent)
+
+		if Part then 
+			RootPart.CFrame = CFrame.new(Part.Position + Part.AssemblyLinearVelocity * Player:GetNetworkPing())
+			RootPart.AssemblyLinearVelocity = Vector3.new(4096, 4096, 4096)
+			if Part.RotVelocity.Magnitude > 30 then
+				table.remove(FlingQueue, 1)
+				return
+			end
+		else
+			FlingActive = false
+			return
+		end
+
+	else
+		FlingActive = false
+		return
 	end
 end
 
@@ -739,11 +786,20 @@ local function OnCharacterAdded() -- SIGNAL : Player.CharacterAdded
 			end
 
 			if Flinging then
-				local TemporarySignal = RunService.PostSimulation:Connect(OnFlingEnabled)
-				repeat task.wait() until not MouseDown
+				local TemporarySignal
 
-				TemporarySignal:Disconnect()
-				TemporarySignal = nil
+				if PresetFling then
+					TemporarySignal = RunService.PostSimulation:Connect(OnPresetFlingEnabled)
+				else
+					TemporarySignal = RunService.PostSimulation:Connect(OnPlayerFling)
+				end
+
+				repeat wait() until not FlingActive
+
+				if TemporarySignal then
+					TemporarySignal:Disconnect()
+					TemporarySignal = nil
+				end
 			end
 
 			TeleportOffset = FakeRoot.Position + GetRandomRadius()

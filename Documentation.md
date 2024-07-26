@@ -37,6 +37,17 @@ local Hats = {
 ### Flinging
 - Arguments: Boolean `[ true / false ]`
 - Warning: Your Simulation Radius will lower drastically every moment it is triggered.
+- Description: Uses your server rig to fling people, you can use the FlingCharacter function to fling a player. Example:
+  
+```lua
+local Global = (getgenv and getgenv()) or shared
+
+Global:FlingCharacter(game.Players["Roblox"].Character)
+```
+
+### PresetFling
+- Arguments: Boolean `[ true / false ]`
+- Warning: Your Simulation Radius will lower drastically every moment it is triggered.
 - Description: Uses your server rig to fling people, Left Mouse Click must be held down to enable flinging state upon respawn, the server rig will follow your mouse and attach to body parts until you let the button off.
 
 ### Animations

@@ -5,19 +5,23 @@
 local Global = (getgenv and getgenv()) or shared
 
 local Configuration = Configuration or {}
-local ReturnOnDeath = Configuration.ReturnOnDeath or false
+
+local RigName = Configuration.RigName or "Evolution, it must've passed you by."
+
+local WaitTime = Configuration.WaitTime or 0.2
+local TeleportOffsetRadius = Configuration.TeleportOffsetRadius or 12
+
 local Flinging = Configuration.Flinging or false
 local PresetFling = Configuration.PresetFling or false
 local Animations = Configuration.Animations or true
-local WaitTime = Configuration.WaitTime or 0.178
-local RigName = Configuration.RigName or "Evolution, it must've passed you by."
-local NoCollisions = Configuration.NoCollisions or Flinging or false
 local AntiVoiding = Configuration.AntiVoiding or false
-local SetSimulationRadius = Configuration.SetSimulationRadius or true	
-local DisableCharacterScripts = Configuration.DisableCharacterScripts or true
-local TeleportOffsetRadius = Configuration.TeleportOffsetRadius or 22
+local ReturnOnDeath = Configuration.ReturnOnDeath or false
 local ForceMobileMode = Configuration.ForceMobileMode or false
 local ForceDesktopMode = Configuration.ForceDesktopMode or false
+local NoCollisions = Configuration.NoCollisions or Flinging or false
+local SetSimulationRadius = Configuration.SetSimulationRadius or true
+local DisableCharacterScripts = Configuration.DisableCharacterScripts or true
+
 local Hats = Configuration.Hats or {
 	["Right Arm"] = {
 		{Texture = "14255544465", Mesh = "14255522247", Name = "RARM", Offset = CFrame.Angles(0, 0, math.rad(90))}
@@ -96,16 +100,18 @@ local TeleportOffset = Vector3.zero
 
 local MouseDown = nil
 local SpaceDown = nil
-local SafeToLoad = nil
 local AnimationHandlingFunction = nil
-
-local RecoverTime = WaitTime / 1.75
 
 local RespawnEvent = Instance.new("BindableEvent")
 
-local RBXSignals = {}
-local HatsInUse = {}
-local KeyInputs = {[Enum.KeyCode.W] = {false, 0, -1}, [Enum.KeyCode.A] = {false, -1, 0}, [Enum.KeyCode.S] = {false, 0, 1}, [Enum.KeyCode.D] = {false, 1, 0}}
+local RBXSignals = table.create(15, nil)
+local HatsInUse = table.create(15, nil)
+local KeyInputs = table.create(4, nil)
+
+KeyInputs[Enum.KeyCode.W] = {false, 0, -1}
+KeyInputs[Enum.KeyCode.A] = {false, -1, 0}
+KeyInputs[Enum.KeyCode.S] = {false, 0, 1}
+KeyInputs[Enum.KeyCode.D] = {false, 1, 0}
 
 local Player = Players.LocalPlayer
 local Mouse = Player:GetMouse()
@@ -250,26 +256,25 @@ do -- [[ Scoped Rig Creating. ]]
 	FakeHumanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 	FakeHumanoid:ChangeState(Enum.HumanoidStateType.Landed)
 
-	local Attachments = {
-		["HairAttachment"] = { CFrame.new(0, 0.6, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Head },
-		["HatAttachment"] = { CFrame.new(0, 0.6, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Head },
-		["FaceFrontAttachment"] = { CFrame.new(0, 0, -0.6, 1, 0, 0, 0, 1, 0, 0, 0, 1), Head },
-		["RootAttachment"] = { CFrame.new(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), FakeRoot },
-		["LeftShoulderAttachment"] = { CFrame.new(0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), LeftArm },
-		["LeftGripAttachment"] = { CFrame.new(0, -1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), LeftArm },
-		["RightShoulderAttachment"] = { CFrame.new(0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), RightArm },
-		["RightGripAttachment"] = { CFrame.new(0, -1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), RightArm },
-		["LeftFootAttachment"] = { CFrame.new(0, -1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), LeftLeg },
-		["RightFootAttachment"] = { CFrame.new(0, -1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), RightLeg },
-		["NeckAttachment"] = { CFrame.new(0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso },
-		["BodyFrontAttachment"] = { CFrame.new(0, 0, -0.5, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso },
-		["BodyBackAttachment"] = { CFrame.new(0, 0, 0.5, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso },
-		["LeftCollarAttachment"] = { CFrame.new(-1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso },
-		["RightCollarAttachment"] = { CFrame.new(1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso },
-		["WaistFrontAttachment"] = { CFrame.new(0, -1, -0.5, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso },
-		["WaistCenterAttachment"] = { CFrame.new(0, -1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso },
-		["WaistBackAttachment"] = { CFrame.new(0, -1, 0.5, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso }
-	}
+	local Attachments = table.create(18, nil)
+	Attachments.HairAttachment = { CFrame.new(0, 0.6, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Head }
+	Attachments.HatAttachment = { CFrame.new(0, 0.6, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Head }
+	Attachments.FaceFrontAttachment = { CFrame.new(0, 0, -0.6, 1, 0, 0, 0, 1, 0, 0, 0, 1), Head }
+	Attachments.RootAttachment = { CFrame.new(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), FakeRoot }
+	Attachments.LeftShoulderAttachment = { CFrame.new(0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), LeftArm }
+	Attachments.LeftGripAttachment = { CFrame.new(0, -1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), LeftArm }
+	Attachments.RightShoulderAttachment = { CFrame.new(0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), RightArm }
+	Attachments.RightGripAttachment = { CFrame.new(0, -1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), RightArm }
+	Attachments.LeftFootAttachment = { CFrame.new(0, -1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), LeftLeg }
+	Attachments.RightFootAttachment = { CFrame.new(0, -1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), RightLeg }
+	Attachments.NeckAttachment = { CFrame.new(0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso }
+	Attachments.BodyFrontAttachment = { CFrame.new(0, 0, -0.5, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso }
+	Attachments.BodyBackAttachment = { CFrame.new(0, 0, 0.5, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso }
+	Attachments.LeftCollarAttachment = { CFrame.new(-1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso }
+	Attachments.RightCollarAttachment = { CFrame.new(1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso }
+	Attachments.WaistFrontAttachment = { CFrame.new(0, -1, -0.5, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso }
+	Attachments.WaistCenterAttachment = { CFrame.new(0, -1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso }
+	Attachments.WaistBackAttachment = { CFrame.new(0, -1, 0.5, 1, 0, 0, 0, 1, 0, 0, 0, 1), Torso }
 
 	for Name, Table in Attachments do
 		MakeAttachment(Name, Table[1], Table[2])
@@ -280,30 +285,58 @@ do -- [[ Scoped Rig Creating. ]]
 	if Animations then
 		task.delay(1, function()
 			local AnimationsToggled = true
+
 			local Pose = "Standing"
 			local CurrentAnim = ""
+
 			local CurrentAnimInstance = nil
 			local CurrentAnimTrack = nil
 			local CurrentAnimKeyframeHandler = nil
+
+			local AnimData = table.create(14, nil)
+			local AnimationTable = table.create(14, nil)
+			local EmoteNames = table.create(7, nil)
+			local Dances = table.create(3, nil)
+
 			local CurrentAnimSpeed = 1.0
 			local JumpAnimTime = 0
 			local Time = 0
-			local AnimationTable = {}
-			local Dances = {"dance1", "dance2", "dance3"}
-			local EmoteNames = { wave = false, point = false, dance1 = true, dance2 = true, dance3 = true, laugh = false, cheer = false}
 
-			local AnimLinks = {
-				-- Movement Anims
-				Idle = "http://www.roblox.com/asset/?id=180435571", Walk = "http://www.roblox.com/asset/?id=180426354", Run = "Run.xml", Jump = "http://www.roblox.com/asset/?id=125750702", Fall = "http://www.roblox.com/asset/?id=180436148", Climb = "http://www.roblox.com/asset/?id=180436334", Sit = "http://www.roblox.com/asset/?id=178130996",
-				-- Animations
-				dance1 = "http://www.roblox.com/asset/?id=182435998", dance2 = "http://www.roblox.com/asset/?id=182436842", dance3 = "http://www.roblox.com/asset/?id=182436935", wave = "http://www.roblox.com/asset/?id=128777973", point = "http://www.roblox.com/asset/?dan=128853357", laugh = "http://www.roblox.com/asset/?id=129423131", cheer = "http://www.roblox.com/asset/?id=129423030"
-			}
+			Dances.wave = false
+			Dances.point = false
+			Dances.dance1 = true
+			Dances.dance2 = true
+			Dances.dance3 = true
+			Dances.laugh = false
+			Dances.cheer = false
 
-			for Name, ID in AnimLinks do
+			Dances[1] = "dance1"
+			Dances[2] = "dance2"
+			Dances[3] = "dance3"
+
+			-- Movement Anims
+			AnimData.Idle = "http://www.roblox.com/asset/?id=180435571"
+			AnimData.Walk = "http://www.roblox.com/asset/?id=180426354"
+			AnimData.Run = "Run.xml"
+			AnimData.Jump = "http://www.roblox.com/asset/?id=125750702"
+			AnimData.Fall = "http://www.roblox.com/asset/?id=180436148"
+			AnimData.Climb = "http://www.roblox.com/asset/?id=180436334"
+			AnimData.Sit = "http://www.roblox.com/asset/?id=178130996"
+
+			-- Animations
+			AnimData.dance1 = "http://www.roblox.com/asset/?id=182435998"
+			AnimData.dance2 = "http://www.roblox.com/asset/?id=182436842"
+			AnimData.dance3 = "http://www.roblox.com/asset/?id=182436935"
+			AnimData.wave = "http://www.roblox.com/asset/?id=128777973"
+			AnimData.point = "http://www.roblox.com/asset/?dan=128853357"
+			AnimData.laugh = "http://www.roblox.com/asset/?id=129423131"
+			AnimData.cheer = "http://www.roblox.com/asset/?id=129423030"
+
+			for Name, ID in AnimData do
 				AnimationTable[Name] = {}
 				AnimationTable[Name].Anim = Instance.new("Animation")
 				AnimationTable[Name].Anim.AnimationId = ID
-			end	
+			end
 
 			local function SetAnimationSpeed(Speed)
 				if Speed ~= CurrentAnimSpeed then
@@ -463,11 +496,14 @@ do -- [[ Scoped Rig Creating. ]]
 					end
 				end
 			end)
+
+			table.clear(AnimData)
 		end)
 	end
 end
 
 -- // RunTime: Functions
+
 local function IsNetworkOwner(Part)  -- <BasePart> : Boolean
 	return Part and Part.ReceiveAge == 0
 end
@@ -586,12 +622,14 @@ local function ArePlayersNearby() -- : Boolean
 		local Model = Part.Parent
 
 		if BetterIsA(Model, "Model") then
-			if Model ~= FakeRig or Model ~= Character then
-				return Model.PrimaryPart ~= nil
+			if BetterFindFirstChildOfClass(Model, "Humanoid") then
+				if not (Model == Character and Model == FakeRig) then
+					return not Model.PrimaryPart == nil
+				end
 			end
 		end
 	end
-
+	
 	return true
 end
 
@@ -610,6 +648,7 @@ end
 local function SetCameraTarget() -- Function | SIGNAL: Camera:GetPropertySignalChanged("CameraSubject")
 	PreviousCameraCFrame = Camera.CFrame
 	Camera.CameraSubject = FakeHumanoid
+
 	RunService.PreRender:Wait()
 	Camera.CFrame = PreviousCameraCFrame
 end
@@ -689,31 +728,29 @@ end
 
 local function OnPostSimulation() -- SIGNAL: RunService.PostSimulation
 	StarterGui:SetCore("ResetButtonCallback", RespawnEvent)
-	local Multiply = SafeToLoad and 4 or 2
 	local ReverseSleep = Vector3.new(0.0075 * math.sin(os.clock() * 7), 0, 0.0085 * math.cos(os.clock() * 16))
 	local SafeYAxis = 35 - 3 * math.sin(os.clock() * 10)
-
-	if CanCallSimRadius then
-		Player.SimulationRadius = 1000
-	end
 
 	for Handle, Data in HatsInUse do
 		local OtherLimb = Data[1]
 
-		if OtherLimb and IsNetworkOwner(Handle) then
-			local Part1Offset = Data[2]
-			local Part1Magnitude = OtherLimb.Size.Magnitude
-			local Part1Velocity = OtherLimb.AssemblyLinearVelocity * Part1Magnitude
-			local CalculatedVel = Part1Velocity * Multiply
-
-			local ClampedAxisY = math.clamp(Part1Velocity.Y, SafeYAxis, 1024)
-			local Velocity = Vector3.new(CalculatedVel.X, ClampedAxisY, CalculatedVel.Z)
-
-			local CFrameOffset = OtherLimb.CFrame * Part1Offset
-
-			Handle.AssemblyLinearVelocity = Velocity
-			Handle.AssemblyAngularVelocity = OtherLimb.AssemblyAngularVelocity
-			Handle.CFrame = SafeToLoad and Handle.CFrame:Lerp(CFrameOffset + ReverseSleep, 1) or RootPart.CFrame
+		if OtherLimb then
+			if IsNetworkOwner(Handle) then
+				local Part1Offset = Data[2]
+	
+				local Part1Magnitude = OtherLimb.Size.Magnitude
+				local Part1Velocity = OtherLimb.AssemblyLinearVelocity * Part1Magnitude
+				local CalculatedVel = Part1Velocity * 2.5
+	
+				local ClampedAxisY = math.clamp(Part1Velocity.Y, SafeYAxis, 1024)
+				local Velocity = Vector3.new(CalculatedVel.X, ClampedAxisY, CalculatedVel.Z)
+				
+				local CFrameOffset = OtherLimb.CFrame * Part1Offset
+	
+				Handle.AssemblyLinearVelocity = Velocity
+				Handle.AssemblyAngularVelocity = OtherLimb.AssemblyAngularVelocity
+				Handle.CFrame = Handle.CFrame:Lerp(CFrameOffset + ReverseSleep, 1)
+			end
 		end
 	end
 end
@@ -727,6 +764,10 @@ local function OnPreSimulation() -- SIGNAL: RunService.PreSimulation
 				Part.CanQuery = false
 			end
 		end
+	end
+
+	if CanCallSimRadius then
+		Player.SimulationRadius = 1000
 	end
 
 	if AntiVoiding then
@@ -764,8 +805,10 @@ local function OnCharacterAdded() -- SIGNAL : Player.CharacterAdded
 	table.clear(HatsInUse)
 	SetCameraTarget()
 
-	SafeToLoad = false
 	Character = Player.Character
+
+	print(Character)
+	print(LastCharacter == Character)
 
 	if Character and LastCharacter ~= Character then
 		LastCharacter = Character
@@ -775,7 +818,7 @@ local function OnCharacterAdded() -- SIGNAL : Player.CharacterAdded
 
 		if Humanoid and RootPart then
 			Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
-			Humanoid:ChangeState(7)
+			Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
 
 			if DisableCharacterScripts then
 				for _, Instance in Character:GetDescendants() do
@@ -817,11 +860,9 @@ local function OnCharacterAdded() -- SIGNAL : Player.CharacterAdded
 
 			SetUpHatConfig()
 			FakeRigChildren = FakeRig:GetChildren()
+
+			RunService.PostSimulation:Wait()
 			Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
-
-			task.wait(RecoverTime)
-
-			SafeToLoad = true
 		end
 	end
 end
@@ -893,7 +934,6 @@ if IsMobile then -- Mobile Support (I know this is badly written but dont attack
 	end)
 end
 
-
 -- // Finalizing: Connecting Events
 
 SetCameraTarget()
@@ -904,7 +944,11 @@ Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
 
 RBXSignals[2] = Player.CharacterAdded:Connect(OnCharacterAdded)
 RBXSignals[3] = RunService.PostSimulation:Connect(OnPostSimulation)
-RBXSignals[4] = RunService.PreAnimation:Connect(OnPreSimulation)
+
+if IsKeyboard or SetSimulationRadius or NoCollisions or AntiVoiding then
+	RBXSignals[4] = RunService.PreAnimation:Connect(OnPreSimulation)
+end
+
 RBXSignals[5] = Camera:GetPropertyChangedSignal("CameraSubject"):Connect(SetCameraTarget)
 RBXSignals[6] = Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(UponCameraChange)
 RBXSignals[7] = FakeRoot:GetPropertyChangedSignal("Parent"):Connect(UponParentChange)
@@ -916,4 +960,3 @@ RBXSignals[11] = UserInputService.InputEnded:Connect(function(Input, GameProcess
 task.wait(WaitTime)
 
 FakeRigChildren = FakeRig:GetChildren()
-SafeToLoad = true
